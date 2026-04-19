@@ -7,31 +7,36 @@ from pathlib import Path
 NOTES_PATH = Path(__file__).with_name("notes.md")
 DEFAULT_MAX_CHARS = 4000
 
+# 工具定义会发给模型，让它知道可以请求 agent 循环调用哪些本地 Python 函数。
 TOOLS = [
     {
         "type": "function",
-        "name": "add_note",
-        "description": "Append a timestamped note to the local notes file.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The note text to save.",
-                }
+        "function": {
+            "name": "add_note",
+            "description": "Append a timestamped note to the local notes file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The note text to save.",
+                    }
+                },
+                "required": ["content"],
+                "additionalProperties": False,
             },
-            "required": ["content"],
-            "additionalProperties": False,
         },
     },
     {
         "type": "function",
-        "name": "read_notes",
-        "description": "Read the local notes file.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
+        "function": {
+            "name": "read_notes",
+            "description": "Read the local notes file.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
         },
     },
 ]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 from openai import OpenAI
@@ -9,7 +10,8 @@ from openai import OpenAI
 from tools import TOOLS, run_tool
 
 
-DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
+ENV_PATH = Path(__file__).with_name(".env")
+DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 MAX_TOOL_ROUNDS = 4
 SYSTEM_PROMPT = (
     "You are a concise CLI notes assistant. "
@@ -23,49 +25,99 @@ def run_agent_turn(
     client: OpenAI,
     messages: list[dict[str, Any]],
     user_text: str,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
 ) -> str:
+    model = model or default_model()
     user_message = {"role": "user", "content": user_text}
-    input_items: list[dict[str, Any]] = [*messages, user_message]
+
+    # Chat Completions 同时适用于 OpenAI 和 DeepSeek，避免维护两套工具调用循环。
+    chat_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *messages,
+        user_message,
+    ]
 
     for _ in range(MAX_TOOL_ROUNDS):
-        response = client.responses.create(
+        completion = client.chat.completions.create(
             model=model,
-            instructions=SYSTEM_PROMPT,
+            messages=chat_messages,
             tools=TOOLS,
-            input=input_items,
-            parallel_tool_calls=False,
+            tool_choice="auto",
         )
-        tool_calls = [
-            item for item in response.output if getattr(item, "type", None) == "function_call"
-        ]
+        message = completion.choices[0].message
+        tool_calls = getattr(message, "tool_calls", None) or []
 
         if not tool_calls:
-            answer = response.output_text.strip()
+            answer = (getattr(message, "content", None) or "").strip()
             messages.extend([user_message, {"role": "assistant", "content": answer}])
             return answer
 
+        chat_messages.append(_assistant_tool_call_message(message, tool_calls))
         for tool_call in tool_calls:
-            input_items.append(
+            chat_messages.append(
                 {
-                    "type": "function_call_output",
-                    "call_id": tool_call.call_id,
-                    "output": _execute_tool_call(tool_call),
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": _execute_tool_call(tool_call),
                 }
             )
 
     raise RuntimeError("The agent reached the maximum number of tool rounds.")
 
 
+def default_model() -> str:
+    return os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
+
+
+def load_dotenv(env_path: Path = ENV_PATH) -> None:
+    if not env_path.exists():
+        return
+
+    # 已有的 shell 环境变量优先，方便用 PowerShell 临时覆盖 .env 配置。
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        if key and value and key not in os.environ:
+            os.environ[key] = value
+
+
+def _assistant_tool_call_message(
+    message: Any,
+    tool_calls: list[Any],
+) -> dict[str, Any]:
+    # Chat Completions 要求顺序是：assistant 调用工具，然后 tool 返回结果。
+    return {
+        "role": "assistant",
+        "content": getattr(message, "content", None),
+        "tool_calls": [
+            {
+                "id": tool_call.id,
+                "type": "function",
+                "function": {
+                    "name": tool_call.function.name,
+                    "arguments": tool_call.function.arguments,
+                },
+            }
+            for tool_call in tool_calls
+        ],
+    }
+
+
 def _execute_tool_call(tool_call: Any) -> str:
     try:
-        arguments = json.loads(tool_call.arguments or "{}")
-        return run_tool(tool_call.name, arguments)
+        arguments = json.loads(tool_call.function.arguments or "{}")
+        return run_tool(tool_call.function.name, arguments)
     except Exception as exc:
         return f"Tool error: {exc}"
 
 
 def main() -> None:
+    load_dotenv()
+
     if not os.getenv("OPENAI_API_KEY"):
         raise SystemExit("Set OPENAI_API_KEY before running the agent.")
 
