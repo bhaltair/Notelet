@@ -7,3 +7,4 @@ __pycache__/
 .pytest_tmp_run
 pytest_tmp_plain
 test_runs/
+notes.md
