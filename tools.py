@@ -1,45 +1,52 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 
 NOTES_PATH = Path(__file__).with_name("notes.md")
 DEFAULT_MAX_CHARS = 4000
 
-# 工具定义会发给模型，让它知道可以请求 agent 循环调用哪些本地 Python 函数。
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "add_note",
-            "description": "Append a timestamped note to the local notes file.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "content": {
-                        "type": "string",
-                        "description": "The note text to save.",
-                    }
-                },
-                "required": ["content"],
-                "additionalProperties": False,
+ToolHandler = Callable[[dict[str, object]], str]
+
+
+@dataclass(frozen=True)
+class Tool:
+    name: str
+    description: str
+    parameters: dict[str, object]
+    handler: ToolHandler
+
+    def schema(self) -> dict[str, object]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_notes",
-            "description": "Read the local notes file.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "additionalProperties": False,
-            },
-        },
-    },
-]
+        }
+
+
+class ToolRegistry:
+    def __init__(self) -> None:
+        self._tools: dict[str, Tool] = {}
+
+    def register(self, tool: Tool) -> None:
+        if tool.name in self._tools:
+            raise ValueError(f"Tool already registered: {tool.name}")
+        self._tools[tool.name] = tool
+
+    def schemas(self) -> list[dict[str, object]]:
+        return [tool.schema() for tool in self._tools.values()]
+
+    def run(self, name: str, arguments: dict[str, object]) -> str:
+        tool = self._tools.get(name)
+        if tool is None:
+            raise ValueError(f"Unknown tool: {name}")
+        return tool.handler(arguments)
 
 
 def add_note(content: str, notes_path: Path = NOTES_PATH) -> str:
@@ -69,14 +76,51 @@ def read_notes(notes_path: Path = NOTES_PATH, max_chars: int = DEFAULT_MAX_CHARS
     return content
 
 
+def default_registry(notes_path: Path = NOTES_PATH) -> ToolRegistry:
+    registry = ToolRegistry()
+    registry.register(
+        Tool(
+            name="add_note",
+            description="Append a timestamped note to the local notes file.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "The note text to save.",
+                    }
+                },
+                "required": ["content"],
+                "additionalProperties": False,
+            },
+            handler=lambda arguments: _run_add_note(arguments, notes_path),
+        )
+    )
+    registry.register(
+        Tool(
+            name="read_notes",
+            description="Read the local notes file.",
+            parameters={
+                "type": "object",
+                "properties": {},
+                "additionalProperties": False,
+            },
+            handler=lambda arguments: read_notes(notes_path=notes_path),
+        )
+    )
+    return registry
+
+
+def _run_add_note(arguments: dict[str, object], notes_path: Path) -> str:
+    content = arguments.get("content")
+    if not isinstance(content, str):
+        raise ValueError("add_note requires a string content argument.")
+    return add_note(content, notes_path=notes_path)
+
+
+DEFAULT_REGISTRY = default_registry()
+TOOLS = DEFAULT_REGISTRY.schemas()
+
+
 def run_tool(name: str, arguments: dict[str, object]) -> str:
-    if name == "add_note":
-        content = arguments.get("content")
-        if not isinstance(content, str):
-            raise ValueError("add_note requires a string content argument.")
-        return add_note(content)
-
-    if name == "read_notes":
-        return read_notes()
-
-    raise ValueError(f"Unknown tool: {name}")
+    return DEFAULT_REGISTRY.run(name, arguments)

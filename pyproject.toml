@@ -1,6 +1,6 @@
 [project]
 name = "simple-agent-notes"
-version = "0.1.0"
+version = "0.0.2"
 description = "A minimal OpenAI-powered CLI notes agent."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,3 +15,12 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = ["-p", "no:cacheprovider"]
+testpaths = ["tests"]
+norecursedirs = [
+    ".pytest_cache",
+    ".pytest_tmp",
+    ".pytest_tmp_run",
+    "pytest_tmp_plain",
+    "test_runs",
+]

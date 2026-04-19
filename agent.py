@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from openai import OpenAI
 
@@ -13,6 +13,7 @@ from tools import TOOLS, run_tool
 ENV_PATH = Path(__file__).with_name(".env")
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 MAX_TOOL_ROUNDS = 4
+ToolEventHandler = Callable[[dict[str, Any]], None]
 SYSTEM_PROMPT = (
     "You are a concise CLI notes assistant. "
     "Use add_note when the user asks you to remember or save something. "
@@ -26,11 +27,10 @@ def run_agent_turn(
     messages: list[dict[str, Any]],
     user_text: str,
     model: str | None = None,
+    on_tool_event: ToolEventHandler | None = None,
 ) -> str:
     model = model or default_model()
     user_message = {"role": "user", "content": user_text}
-
-    # Chat Completions 同时适用于 OpenAI 和 DeepSeek，避免维护两套工具调用循环。
     chat_messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         *messages,
@@ -58,7 +58,7 @@ def run_agent_turn(
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": _execute_tool_call(tool_call),
+                    "content": _execute_tool_call(tool_call, on_tool_event),
                 }
             )
 
@@ -73,7 +73,7 @@ def load_dotenv(env_path: Path = ENV_PATH) -> None:
     if not env_path.exists():
         return
 
-    # 已有的 shell 环境变量优先，方便用 PowerShell 临时覆盖 .env 配置。
+    # Existing shell values win so PowerShell can temporarily override .env.
     for raw_line in env_path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
         if not line or line.startswith("#") or "=" not in line:
@@ -89,7 +89,7 @@ def _assistant_tool_call_message(
     message: Any,
     tool_calls: list[Any],
 ) -> dict[str, Any]:
-    # Chat Completions 要求顺序是：assistant 调用工具，然后 tool 返回结果。
+    # Chat Completions expects assistant tool calls before matching tool results.
     return {
         "role": "assistant",
         "content": getattr(message, "content", None),
@@ -107,12 +107,42 @@ def _assistant_tool_call_message(
     }
 
 
-def _execute_tool_call(tool_call: Any) -> str:
+def _execute_tool_call(
+    tool_call: Any,
+    on_tool_event: ToolEventHandler | None = None,
+) -> str:
+    name = tool_call.function.name
     try:
         arguments = json.loads(tool_call.function.arguments or "{}")
-        return run_tool(tool_call.function.name, arguments)
+        _emit_tool_event(
+            on_tool_event,
+            {"type": "tool_call", "name": name, "arguments": arguments},
+        )
+        output = run_tool(name, arguments)
     except Exception as exc:
-        return f"Tool error: {exc}"
+        output = f"Tool error: {exc}"
+
+    _emit_tool_event(
+        on_tool_event,
+        {"type": "tool_result", "name": name, "output": output},
+    )
+    return output
+
+
+def _emit_tool_event(
+    on_tool_event: ToolEventHandler | None,
+    event: dict[str, Any],
+) -> None:
+    if on_tool_event is not None:
+        on_tool_event(event)
+
+
+def print_tool_event(event: dict[str, Any]) -> None:
+    if event["type"] == "tool_call":
+        arguments = json.dumps(event["arguments"], ensure_ascii=False)
+        print(f"Tool call: {event['name']}({arguments})")
+    elif event["type"] == "tool_result":
+        print(f"Tool result: {event['output']}")
 
 
 def main() -> None:
@@ -133,7 +163,12 @@ def main() -> None:
             continue
 
         try:
-            answer = run_agent_turn(client, messages, user_text)
+            answer = run_agent_turn(
+                client,
+                messages,
+                user_text,
+                on_tool_event=print_tool_event,
+            )
         except Exception as exc:
             answer = f"Agent error: {exc}"
 

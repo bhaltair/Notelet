@@ -35,6 +35,8 @@ OPENAI_API_KEY=your-api-key
 OPENAI_MODEL=gpt-5.4-mini
 ```
 
+Or copy `.env.example` and fill in your own values.
+
 ### DeepSeek
 
 DeepSeek's API is OpenAI-compatible, so the same Chat Completions loop works
@@ -79,6 +81,15 @@ What notes have I saved?
 
 Type `exit` or `quit` to stop.
 
+When the model uses a tool, the CLI prints the local action before the final
+answer:
+
+```text
+Tool call: add_note({"content": "review the simple agent design on Friday"})
+Tool result: Note saved.
+Agent> Saved it.
+```
+
 ## Test
 
 ```powershell
@@ -88,6 +99,6 @@ uv run pytest
 ## Project Shape
 
 - `agent.py`: interactive CLI loop and Chat Completions tool-call loop
-- `tools.py`: local note tools, tool schemas, and tool dispatcher
+- `tools.py`: local note tools, tool schemas, and the tool registry
 - `notes.md`: local durable notes storage
 - `tests/`: unit tests for tool behavior and the agent loop

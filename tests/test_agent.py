@@ -53,6 +53,7 @@ def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatc
     client = FakeChatClient([first_completion, final_completion])
     messages = []
     tool_calls = []
+    events = []
 
     def fake_run_tool(name, arguments):
         tool_calls.append((name, arguments))
@@ -65,6 +66,7 @@ def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatc
         messages,
         "Remember: Review simple agent",
         model="test-model",
+        on_tool_event=events.append,
     )
 
     assert answer == "Saved it."
@@ -77,6 +79,18 @@ def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatc
         "tool_call_id": "call_123",
         "content": "Note saved.",
     }
+    assert events == [
+        {
+            "type": "tool_call",
+            "name": "add_note",
+            "arguments": {"content": "Review simple agent"},
+        },
+        {
+            "type": "tool_result",
+            "name": "add_note",
+            "output": "Note saved.",
+        },
+    ]
     assert messages == [
         {"role": "user", "content": "Remember: Review simple agent"},
         {"role": "assistant", "content": "Saved it."},
