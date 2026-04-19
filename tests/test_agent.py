@@ -97,6 +97,36 @@ def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatc
     ]
 
 
+def test_run_agent_turn_emits_structured_trace_events(monkeypatch):
+    completion = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content="Hello there.", tool_calls=None)
+            )
+        ]
+    )
+    client = FakeChatClient([completion])
+    events = []
+
+    answer = agent.run_agent_turn(
+        client,
+        [],
+        "Hello",
+        model="test-model",
+        on_event=events.append,
+    )
+
+    assert answer == "Hello there."
+    assert [event["type"] for event in events] == [
+        "user_message",
+        "model_response",
+        "final_answer",
+    ]
+    assert events[0]["content"] == "Hello"
+    assert events[1]["model"] == "test-model"
+    assert events[2]["content"] == "Hello there."
+
+
 def test_load_dotenv_sets_missing_environment_values(monkeypatch):
     env_path = FIXTURES_PATH / "deepseek.env"
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

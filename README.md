@@ -1,10 +1,12 @@
 # Simple Notes Agent
 
 A minimal Python CLI agent that uses the OpenAI-compatible Chat Completions API
-to call two local tools:
+to call local memory tools:
 
-- `add_note(content)`: append a timestamped note to `notes.md`
-- `read_notes()`: read saved notes, with large output trimmed before returning to the model
+- `add_note(content)`: save a timestamped note to SQLite memory
+- `read_notes()`: read recent saved notes
+- `search_notes(query)`: search saved notes by keyword
+- `list_recent_notes(limit)`: list the newest notes
 
 The code is intentionally small so the model/tool loop is easy to inspect.
 
@@ -90,6 +92,10 @@ Tool result: Note saved.
 Agent> Saved it.
 ```
 
+The agent also writes structured execution traces to `traces/YYYY-MM-DD.jsonl`
+with user messages, model responses, tool calls, tool results, final answers,
+and errors.
+
 ## Test
 
 ```powershell
@@ -98,7 +104,10 @@ uv run pytest
 
 ## Project Shape
 
-- `agent.py`: interactive CLI loop and Chat Completions tool-call loop
+- `agent.py`: interactive CLI loop, Chat Completions tool-call loop, and trace wiring
+- `memory.py`: SQLite-backed persistent note memory
+- `tracing.py`: JSONL execution tracing
 - `tools.py`: local note tools, tool schemas, and the tool registry
-- `notes.md`: local durable notes storage
+- `notes.db`: ignored local durable notes storage
+- `traces/`: ignored local JSONL execution traces
 - `tests/`: unit tests for tool behavior and the agent loop

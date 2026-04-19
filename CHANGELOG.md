@@ -2,6 +2,19 @@
 
 All notable changes to Notelet are documented here.
 
+## Unreleased
+
+### Added
+
+- Added JSONL execution traces for user messages, model responses, tool calls,
+  tool results, final answers, and errors.
+- Added SQLite-backed persistent note memory.
+- Added `search_notes` and `list_recent_notes` tools.
+
+### Changed
+
+- Moved runtime note storage from `notes.md` to ignored `notes.db`.
+
 ## v0.0.2 - 2026-04-19
 
 ### Added

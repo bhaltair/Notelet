@@ -7,17 +7,19 @@ from typing import Any, Callable
 
 from openai import OpenAI
 
+from tracing import JsonlTracer
 from tools import TOOLS, run_tool
 
 
 ENV_PATH = Path(__file__).with_name(".env")
 DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
 MAX_TOOL_ROUNDS = 4
-ToolEventHandler = Callable[[dict[str, Any]], None]
+EventHandler = Callable[[dict[str, Any]], None]
 SYSTEM_PROMPT = (
     "You are a concise CLI notes assistant. "
     "Use add_note when the user asks you to remember or save something. "
-    "Use read_notes when the user asks what has been saved. "
+    "Use search_notes when the user asks for specific saved information. "
+    "Use list_recent_notes or read_notes when the user asks what has been saved. "
     "Only claim a note was saved after the add_note tool succeeds."
 )
 
@@ -27,10 +29,12 @@ def run_agent_turn(
     messages: list[dict[str, Any]],
     user_text: str,
     model: str | None = None,
-    on_tool_event: ToolEventHandler | None = None,
+    on_tool_event: EventHandler | None = None,
+    on_event: EventHandler | None = None,
 ) -> str:
     model = model or default_model()
     user_message = {"role": "user", "content": user_text}
+    _emit_event(on_event, {"type": "user_message", "content": user_text})
     chat_messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         *messages,
@@ -46,10 +50,20 @@ def run_agent_turn(
         )
         message = completion.choices[0].message
         tool_calls = getattr(message, "tool_calls", None) or []
+        _emit_event(
+            on_event,
+            {
+                "type": "model_response",
+                "model": model,
+                "content": getattr(message, "content", None),
+                "tool_call_count": len(tool_calls),
+            },
+        )
 
         if not tool_calls:
             answer = (getattr(message, "content", None) or "").strip()
             messages.extend([user_message, {"role": "assistant", "content": answer}])
+            _emit_event(on_event, {"type": "final_answer", "content": answer})
             return answer
 
         chat_messages.append(_assistant_tool_call_message(message, tool_calls))
@@ -58,7 +72,7 @@ def run_agent_turn(
                 {
                     "role": "tool",
                     "tool_call_id": tool_call.id,
-                    "content": _execute_tool_call(tool_call, on_tool_event),
+                    "content": _execute_tool_call(tool_call, on_tool_event, on_event),
                 }
             )
 
@@ -109,32 +123,31 @@ def _assistant_tool_call_message(
 
 def _execute_tool_call(
     tool_call: Any,
-    on_tool_event: ToolEventHandler | None = None,
+    on_tool_event: EventHandler | None = None,
+    on_event: EventHandler | None = None,
 ) -> str:
     name = tool_call.function.name
     try:
         arguments = json.loads(tool_call.function.arguments or "{}")
-        _emit_tool_event(
-            on_tool_event,
-            {"type": "tool_call", "name": name, "arguments": arguments},
-        )
+        event = {"type": "tool_call", "name": name, "arguments": arguments}
+        _emit_event(on_tool_event, event)
+        _emit_event(on_event, event)
         output = run_tool(name, arguments)
     except Exception as exc:
         output = f"Tool error: {exc}"
 
-    _emit_tool_event(
-        on_tool_event,
-        {"type": "tool_result", "name": name, "output": output},
-    )
+    event = {"type": "tool_result", "name": name, "output": output}
+    _emit_event(on_tool_event, event)
+    _emit_event(on_event, event)
     return output
 
 
-def _emit_tool_event(
-    on_tool_event: ToolEventHandler | None,
+def _emit_event(
+    on_event: EventHandler | None,
     event: dict[str, Any],
 ) -> None:
-    if on_tool_event is not None:
-        on_tool_event(event)
+    if on_event is not None:
+        on_event(event)
 
 
 def print_tool_event(event: dict[str, Any]) -> None:
@@ -145,6 +158,14 @@ def print_tool_event(event: dict[str, Any]) -> None:
         print(f"Tool result: {event['output']}")
 
 
+def build_cli_event_handler(tracer: JsonlTracer) -> EventHandler:
+    def handle_event(event: dict[str, Any]) -> None:
+        tracer.record(event)
+        print_tool_event(event)
+
+    return handle_event
+
+
 def main() -> None:
     load_dotenv()
 
@@ -152,6 +173,7 @@ def main() -> None:
         raise SystemExit("Set OPENAI_API_KEY before running the agent.")
 
     client = OpenAI()
+    tracer = JsonlTracer()
     messages: list[dict[str, Any]] = []
 
     print("Simple Notes Agent. Type 'exit' or 'quit' to stop.")
@@ -167,9 +189,10 @@ def main() -> None:
                 client,
                 messages,
                 user_text,
-                on_tool_event=print_tool_event,
+                on_event=build_cli_event_handler(tracer),
             )
         except Exception as exc:
+            tracer.record({"type": "agent_error", "message": str(exc)})
             answer = f"Agent error: {exc}"
 
         print(f"Agent> {answer}")

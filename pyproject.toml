@@ -23,4 +23,5 @@ norecursedirs = [
     ".pytest_tmp_run",
     "pytest_tmp_plain",
     "test_runs",
+    "traces",
 ]

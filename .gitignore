@@ -8,3 +8,5 @@ __pycache__/
 pytest_tmp_plain
 test_runs/
 notes.md
+notes.db
+traces/

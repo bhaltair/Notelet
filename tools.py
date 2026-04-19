@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from memory import MEMORY_DB_PATH, NoteStore
 
-NOTES_PATH = Path(__file__).with_name("notes.md")
+
 DEFAULT_MAX_CHARS = 4000
-
 ToolHandler = Callable[[dict[str, object]], str]
 
 
@@ -49,39 +48,41 @@ class ToolRegistry:
         return tool.handler(arguments)
 
 
-def add_note(content: str, notes_path: Path = NOTES_PATH) -> str:
-    note = content.strip()
-    if not note:
-        raise ValueError("Note content cannot be empty.")
-
-    notes_path.parent.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
-    with notes_path.open("a", encoding="utf-8") as file:
-        file.write(f"- {timestamp} {note}\n")
-
-    return "Note saved."
+def add_note(content: str, db_path: Path = MEMORY_DB_PATH) -> str:
+    return NoteStore(db_path).add_note(content)
 
 
-def read_notes(notes_path: Path = NOTES_PATH, max_chars: int = DEFAULT_MAX_CHARS) -> str:
-    if not notes_path.exists():
-        return "No notes yet."
-
-    content = notes_path.read_text(encoding="utf-8").strip()
-    if not content:
-        return "No notes yet."
-
-    if len(content) > max_chars:
-        return f"{content[:max_chars]}\n[Notes trimmed to {max_chars} characters.]"
-
-    return content
+def read_notes(db_path: Path = MEMORY_DB_PATH, max_chars: int = DEFAULT_MAX_CHARS) -> str:
+    return NoteStore(db_path).format_recent_notes(max_chars=max_chars)
 
 
-def default_registry(notes_path: Path = NOTES_PATH) -> ToolRegistry:
+def search_notes(
+    query: str,
+    db_path: Path = MEMORY_DB_PATH,
+    limit: int = 10,
+    max_chars: int = DEFAULT_MAX_CHARS,
+) -> str:
+    return NoteStore(db_path).format_search_results(
+        query,
+        limit=limit,
+        max_chars=max_chars,
+    )
+
+
+def list_recent_notes(
+    limit: int = 10,
+    db_path: Path = MEMORY_DB_PATH,
+    max_chars: int = DEFAULT_MAX_CHARS,
+) -> str:
+    return NoteStore(db_path).format_recent_notes(limit=limit, max_chars=max_chars)
+
+
+def default_registry(db_path: Path = MEMORY_DB_PATH) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(
         Tool(
             name="add_note",
-            description="Append a timestamped note to the local notes file.",
+            description="Append a timestamped note to persistent local memory.",
             parameters={
                 "type": "object",
                 "properties": {
@@ -93,29 +94,89 @@ def default_registry(notes_path: Path = NOTES_PATH) -> ToolRegistry:
                 "required": ["content"],
                 "additionalProperties": False,
             },
-            handler=lambda arguments: _run_add_note(arguments, notes_path),
+            handler=lambda arguments: _run_add_note(arguments, db_path),
         )
     )
     registry.register(
         Tool(
             name="read_notes",
-            description="Read the local notes file.",
+            description="Read recent notes from persistent local memory.",
             parameters={
                 "type": "object",
                 "properties": {},
                 "additionalProperties": False,
             },
-            handler=lambda arguments: read_notes(notes_path=notes_path),
+            handler=lambda arguments: read_notes(db_path=db_path),
+        )
+    )
+    registry.register(
+        Tool(
+            name="search_notes",
+            description="Search saved notes by keyword.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Keyword or phrase to search for.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of matching notes to return.",
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            handler=lambda arguments: _run_search_notes(arguments, db_path),
+        )
+    )
+    registry.register(
+        Tool(
+            name="list_recent_notes",
+            description="List the most recent saved notes.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of recent notes to return.",
+                    }
+                },
+                "additionalProperties": False,
+            },
+            handler=lambda arguments: _run_list_recent_notes(arguments, db_path),
         )
     )
     return registry
 
 
-def _run_add_note(arguments: dict[str, object], notes_path: Path) -> str:
+def _run_add_note(arguments: dict[str, object], db_path: Path) -> str:
     content = arguments.get("content")
     if not isinstance(content, str):
         raise ValueError("add_note requires a string content argument.")
-    return add_note(content, notes_path=notes_path)
+    return add_note(content, db_path=db_path)
+
+
+def _run_search_notes(arguments: dict[str, object], db_path: Path) -> str:
+    query = arguments.get("query")
+    if not isinstance(query, str):
+        raise ValueError("search_notes requires a string query argument.")
+    limit = _optional_int(arguments.get("limit"), default=10)
+    return search_notes(query, db_path=db_path, limit=limit)
+
+
+def _run_list_recent_notes(arguments: dict[str, object], db_path: Path) -> str:
+    limit = _optional_int(arguments.get("limit"), default=10)
+    return list_recent_notes(limit=limit, db_path=db_path)
+
+
+def _optional_int(value: object, default: int) -> int:
+    if value is None:
+        return default
+    if not isinstance(value, int):
+        raise ValueError("limit must be an integer.")
+    return value
 
 
 DEFAULT_REGISTRY = default_registry()

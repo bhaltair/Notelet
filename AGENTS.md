@@ -41,13 +41,14 @@ uv run pytest
 - Run syntax verification with:
 
 ```powershell
-uv run python -m py_compile agent.py tools.py tests/test_agent.py tests/test_tools.py
+uv run python -m py_compile agent.py memory.py tracing.py tools.py tests/test_agent.py tests/test_memory.py tests/test_tracing.py tests/test_tools.py
 ```
 
 - Do not commit `.env`, local temporary directories, Python caches, or generated
   notes from personal runs.
-- Treat `notes.md` as runtime data. Do not include user note changes in feature
-  commits unless the task explicitly asks for fixture data.
+- Treat `notes.db`, `notes.md`, and `traces/` as runtime data. Do not include
+  user note or trace changes in feature commits unless the task explicitly asks
+  for fixture data.
 
 ## Testing Expectations
 
