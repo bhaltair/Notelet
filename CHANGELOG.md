@@ -2,6 +2,15 @@
 
 All notable changes to Notelet are documented here.
 
+## v0.0.4 - 2026-04-19
+
+### Added
+
+- Added deterministic agent-loop tests for malformed tool arguments, unknown
+  tools, and maximum tool-round failures.
+- Added structured `tool_error` trace events and `is_error` markers on tool
+  results when local tool execution fails.
+
 ## v0.0.3 - 2026-04-19
 
 ### Added

@@ -127,6 +127,7 @@ def _execute_tool_call(
     on_event: EventHandler | None = None,
 ) -> str:
     name = tool_call.function.name
+    is_error = False
     try:
         arguments = json.loads(tool_call.function.arguments or "{}")
         event = {"type": "tool_call", "name": name, "arguments": arguments}
@@ -134,9 +135,13 @@ def _execute_tool_call(
         _emit_event(on_event, event)
         output = run_tool(name, arguments)
     except Exception as exc:
+        is_error = True
         output = f"Tool error: {exc}"
+        event = {"type": "tool_error", "name": name, "message": str(exc)}
+        _emit_event(on_tool_event, event)
+        _emit_event(on_event, event)
 
-    event = {"type": "tool_result", "name": name, "output": output}
+    event = {"type": "tool_result", "name": name, "output": output, "is_error": is_error}
     _emit_event(on_tool_event, event)
     _emit_event(on_event, event)
     return output
@@ -154,7 +159,9 @@ def print_tool_event(event: dict[str, Any]) -> None:
     if event["type"] == "tool_call":
         arguments = json.dumps(event["arguments"], ensure_ascii=False)
         print(f"Tool call: {event['name']}({arguments})")
-    elif event["type"] == "tool_result":
+    elif event["type"] == "tool_error":
+        print(f"Tool error: {event['message']}")
+    elif event["type"] == "tool_result" and not event.get("is_error"):
         print(f"Tool result: {event['output']}")
 
 

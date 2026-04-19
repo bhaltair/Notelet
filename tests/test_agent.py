@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import agent
 
 
@@ -28,28 +30,30 @@ class FakeChatClient:
         self.chat = FakeChat(completions)
 
 
+def make_tool_call(name, arguments, call_id="call_123"):
+    return SimpleNamespace(
+        id=call_id,
+        function=SimpleNamespace(name=name, arguments=arguments),
+    )
+
+
+def make_completion(content=None, tool_calls=None):
+    return SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=content, tool_calls=tool_calls)
+            )
+        ]
+    )
+
+
 def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatch):
-    tool_call = SimpleNamespace(
-        id="call_123",
-        function=SimpleNamespace(
-            name="add_note",
-            arguments=json.dumps({"content": "Review simple agent"}),
-        ),
+    tool_call = make_tool_call(
+        "add_note",
+        json.dumps({"content": "Review simple agent"}),
     )
-    first_completion = SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(content=None, tool_calls=[tool_call])
-            )
-        ]
-    )
-    final_completion = SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(content="Saved it.", tool_calls=None)
-            )
-        ]
-    )
+    first_completion = make_completion(tool_calls=[tool_call])
+    final_completion = make_completion(content="Saved it.")
     client = FakeChatClient([first_completion, final_completion])
     messages = []
     tool_calls = []
@@ -89,6 +93,7 @@ def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatc
             "type": "tool_result",
             "name": "add_note",
             "output": "Note saved.",
+            "is_error": False,
         },
     ]
     assert messages == [
@@ -98,13 +103,7 @@ def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatc
 
 
 def test_run_agent_turn_emits_structured_trace_events(monkeypatch):
-    completion = SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(content="Hello there.", tool_calls=None)
-            )
-        ]
-    )
+    completion = make_completion(content="Hello there.")
     client = FakeChatClient([completion])
     events = []
 
@@ -125,6 +124,130 @@ def test_run_agent_turn_emits_structured_trace_events(monkeypatch):
     assert events[0]["content"] == "Hello"
     assert events[1]["model"] == "test-model"
     assert events[2]["content"] == "Hello there."
+
+
+def test_run_agent_turn_reports_malformed_tool_arguments(monkeypatch):
+    tool_call = make_tool_call("add_note", "{")
+    client = FakeChatClient(
+        [
+            make_completion(tool_calls=[tool_call]),
+            make_completion(content="I could not save that note."),
+        ]
+    )
+    events = []
+
+    def fail_if_called(name, arguments):
+        raise AssertionError("run_tool should not be called with malformed JSON")
+
+    monkeypatch.setattr(agent, "run_tool", fail_if_called)
+
+    answer = agent.run_agent_turn(
+        client,
+        [],
+        "Remember this",
+        model="test-model",
+        on_event=events.append,
+    )
+
+    assert answer == "I could not save that note."
+    assert [event["type"] for event in events] == [
+        "user_message",
+        "model_response",
+        "tool_error",
+        "tool_result",
+        "model_response",
+        "final_answer",
+    ]
+    assert events[2]["name"] == "add_note"
+    assert "Expecting property name" in events[2]["message"]
+    assert events[3]["is_error"] is True
+    assert events[3]["output"].startswith("Tool error:")
+
+
+def test_run_agent_turn_reports_unknown_tools(monkeypatch):
+    tool_call = make_tool_call("missing_tool", "{}")
+    client = FakeChatClient(
+        [
+            make_completion(tool_calls=[tool_call]),
+            make_completion(content="I cannot use that tool."),
+        ]
+    )
+    events = []
+
+    def fake_run_tool(name, arguments):
+        raise ValueError(f"Unknown tool: {name}")
+
+    monkeypatch.setattr(agent, "run_tool", fake_run_tool)
+
+    answer = agent.run_agent_turn(
+        client,
+        [],
+        "Use the missing tool",
+        model="test-model",
+        on_event=events.append,
+    )
+
+    assert answer == "I cannot use that tool."
+    assert [event["type"] for event in events] == [
+        "user_message",
+        "model_response",
+        "tool_call",
+        "tool_error",
+        "tool_result",
+        "model_response",
+        "final_answer",
+    ]
+    assert events[2]["arguments"] == {}
+    assert events[3]["message"] == "Unknown tool: missing_tool"
+    assert events[4]["is_error"] is True
+
+
+def test_run_agent_turn_stops_after_max_tool_rounds(monkeypatch):
+    completions = [
+        make_completion(
+            tool_calls=[
+                make_tool_call(
+                    "add_note",
+                    json.dumps({"content": f"Loop note {index}"}),
+                    call_id=f"call_{index}",
+                )
+            ]
+        )
+        for index in range(agent.MAX_TOOL_ROUNDS)
+    ]
+    client = FakeChatClient(completions)
+    events = []
+
+    monkeypatch.setattr(agent, "run_tool", lambda name, arguments: "Note saved.")
+
+    with pytest.raises(RuntimeError, match="maximum number of tool rounds"):
+        agent.run_agent_turn(
+            client,
+            [],
+            "Keep saving notes",
+            model="test-model",
+            on_event=events.append,
+        )
+
+    assert len(client.chat.completions.calls) == agent.MAX_TOOL_ROUNDS
+    assert [event["type"] for event in events].count("tool_call") == agent.MAX_TOOL_ROUNDS
+    assert [event["type"] for event in events].count("tool_result") == agent.MAX_TOOL_ROUNDS
+
+
+def test_print_tool_event_prints_tool_errors_once(capsys):
+    agent.print_tool_event(
+        {"type": "tool_error", "name": "add_note", "message": "bad arguments"}
+    )
+    agent.print_tool_event(
+        {
+            "type": "tool_result",
+            "name": "add_note",
+            "output": "Tool error: bad arguments",
+            "is_error": True,
+        }
+    )
+
+    assert capsys.readouterr().out == "Tool error: bad arguments\n"
 
 
 def test_load_dotenv_sets_missing_environment_values(monkeypatch):
