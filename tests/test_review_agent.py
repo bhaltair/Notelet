@@ -79,6 +79,15 @@ def test_load_dotenv_ignores_missing_blank_and_comment_lines(tmp_path):
     assert environ == {"OPENAI_MODEL": "quoted-model"}
 
 
+def test_normalize_openai_environment_removes_blank_base_url():
+    # GitHub Actions 未配置 OPENAI_BASE_URL 时会传空字符串，应视为未设置。
+    environ = {"OPENAI_BASE_URL": "   ", "OPENAI_API_KEY": "key"}
+
+    review_agent.normalize_openai_environment(environ)
+
+    assert environ == {"OPENAI_API_KEY": "key"}
+
+
 def test_parse_review_json_accepts_fenced_json():
     # 兼容模型偶尔返回 ```json fenced block 的情况。
     payload = {

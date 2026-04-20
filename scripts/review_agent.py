@@ -52,6 +52,12 @@ def load_dotenv(env_path, environ=os.environ):
             environ[key] = value
 
 
+def normalize_openai_environment(environ=os.environ):
+    # GitHub Actions 的空 variable 会变成空字符串；OpenAI SDK 会把它当成 URL。
+    if "OPENAI_BASE_URL" in environ and not environ["OPENAI_BASE_URL"].strip():
+        del environ["OPENAI_BASE_URL"]
+
+
 def run_command(args):
     result = subprocess.run(
         args,
@@ -208,6 +214,7 @@ def has_blocking_findings(review):
 
 
 def call_model(system_prompt, user_prompt, model):
+    normalize_openai_environment()
     client = OpenAI()
     request = {
         "model": model,
