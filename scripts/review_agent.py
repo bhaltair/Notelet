@@ -53,7 +53,14 @@ def load_dotenv(env_path, environ=os.environ):
 
 
 def run_command(args):
-    result = subprocess.run(args, check=True, capture_output=True, text=True)
+    result = subprocess.run(
+        args,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     return result.stdout.strip()
 
 
