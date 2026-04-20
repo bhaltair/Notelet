@@ -11,6 +11,7 @@ from openai import OpenAI
 
 
 COMMENT_MARKER = "<!-- notelet-review-agent -->"
+# 下面这些常量控制 review agent 的输入规模和阻断策略，方便后续渐进调优。
 MAX_DIFF_CHARS = 60000
 MAX_CONTEXT_CHARS = 20000
 BLOCKING_SEVERITIES = {"P0", "P1"}
@@ -18,6 +19,7 @@ ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 
 
 def build_parser():
+    # 同一份脚本同时服务 CI 和本地 dry-run；CLI 参数主要照顾本地调试。
     parser = argparse.ArgumentParser(description="Run the Notelet PR review agent.")
     parser.add_argument("--dry-run", action="store_true", help="Print review markdown instead of posting it.")
     parser.add_argument("--base", help="Base git ref for local review, such as origin/main or a commit SHA.")
@@ -28,6 +30,7 @@ def build_parser():
 
 
 def resolve_run_config(args, environ):
+    # CI 用 BASE_SHA/HEAD_SHA，本地可以用 --base/--head 覆盖。
     return {
         "base_ref": args.base or environ.get("BASE_SHA"),
         "head_ref": args.head or environ.get("HEAD_SHA", "HEAD"),
@@ -59,6 +62,7 @@ def normalize_openai_environment(environ=os.environ):
 
 
 def run_command(args):
+    # Windows 默认编码可能是 GBK；git diff 里有 UTF-8 字符时要显式解码。
     result = subprocess.run(
         args,
         check=True,
@@ -97,6 +101,7 @@ def compact_diff(diff):
 
 
 def build_user_prompt(diff, changed_files, project_context):
+    # 模型只拿到必要输入：文件列表、项目规则上下文、以及本次 PR diff。
     return "\n\n".join(
         [
             "Review this pull request for Notelet.",
@@ -131,6 +136,7 @@ def strip_json_fence(text):
 
 
 def parse_review_json(text):
+    # 模型输出先转成结构化数据，再由本地代码决定怎么展示或是否阻断。
     data = json.loads(strip_json_fence(text))
     if not isinstance(data, dict):
         raise ValueError("Review response must be a JSON object.")
@@ -160,6 +166,7 @@ def parse_review_json(text):
 
 
 def render_review_markdown(review):
+    # GitHub PR 评论最终只是一段 Markdown；这里集中控制展示格式。
     lines = [
         COMMENT_MARKER,
         "## Review Agent",
@@ -214,6 +221,7 @@ def has_blocking_findings(review):
 
 
 def call_model(system_prompt, user_prompt, model):
+    # 这里保持 OpenAI-compatible Chat Completions 接口，和主 agent runtime 一致。
     normalize_openai_environment()
     client = OpenAI()
     request = {
@@ -232,6 +240,7 @@ def call_model(system_prompt, user_prompt, model):
 
 
 def github_request(method, url, token, payload=None):
+    # 只使用标准库发 GitHub API 请求，避免为 CI 评论功能再加依赖。
     data = None
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
@@ -257,6 +266,7 @@ def upsert_pr_comment(repo, pr_number, token, body):
 
 
 def main():
+    # 主流程：读配置 -> 收集 diff -> 调模型 -> 校验 JSON -> 输出/更新 PR 评论。
     parser = build_parser()
     args = parser.parse_args()
     load_dotenv(args.env_file)
