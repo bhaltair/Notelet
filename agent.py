@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, Callable
+from types import SimpleNamespace
+from typing import Any, Callable, Iterator
 
 from openai import OpenAI
 
@@ -79,6 +80,90 @@ def run_agent_turn(
     raise RuntimeError("The agent reached the maximum number of tool rounds.")
 
 
+def stream_agent_turn(
+    client: OpenAI,
+    messages: list[dict[str, Any]],
+    user_text: str,
+    model: str | None = None,
+    on_tool_event: EventHandler | None = None,
+    on_event: EventHandler | None = None,
+) -> Iterator[dict[str, Any]]:
+    model = model or default_model()
+    user_message = {"role": "user", "content": user_text}
+    user_event = {"type": "user_message", "content": user_text}
+    _emit_event(on_event, user_event)
+    yield user_event
+    chat_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        *messages,
+        user_message,
+    ]
+
+    for _ in range(MAX_TOOL_ROUNDS):
+        answer_parts: list[str] = []
+        tool_call_parts: dict[int, dict[str, str]] = {}
+        stream = client.chat.completions.create(
+            model=model,
+            messages=chat_messages,
+            tools=TOOLS,
+            tool_choice="auto",
+            stream=True,
+        )
+
+        for chunk in stream:
+            delta = _first_choice_delta(chunk)
+            if delta is None:
+                continue
+
+            content = _get_value(delta, "content")
+            if content:
+                answer_parts.append(content)
+                event = {"type": "answer_delta", "content": content}
+                _emit_event(on_event, event)
+                yield event
+
+            for tool_call_delta in _get_value(delta, "tool_calls") or []:
+                _accumulate_tool_call_delta(tool_call_parts, tool_call_delta)
+
+        tool_calls = _build_streamed_tool_calls(tool_call_parts)
+        model_event = {
+            "type": "model_response",
+            "model": model,
+            "content": "".join(answer_parts) or None,
+            "tool_call_count": len(tool_calls),
+        }
+        _emit_event(on_event, model_event)
+        yield model_event
+
+        if not tool_calls:
+            answer = "".join(answer_parts).strip()
+            messages.extend([user_message, {"role": "assistant", "content": answer}])
+            final_event = {"type": "final_answer", "content": answer}
+            _emit_event(on_event, final_event)
+            yield final_event
+            return
+
+        chat_messages.append(_assistant_tool_call_message(None, tool_calls))
+        for tool_call in tool_calls:
+            tool_events: list[dict[str, Any]] = []
+
+            def capture_tool_event(event: dict[str, Any]) -> None:
+                tool_events.append(event)
+                _emit_event(on_tool_event, event)
+
+            output = _execute_tool_call(tool_call, capture_tool_event, on_event)
+            yield from tool_events
+            chat_messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": output,
+                }
+            )
+
+    raise RuntimeError("The agent reached the maximum number of tool rounds.")
+
+
 def default_model() -> str:
     return os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
 
@@ -106,7 +191,7 @@ def _assistant_tool_call_message(
     # Chat Completions expects assistant tool calls before matching tool results.
     return {
         "role": "assistant",
-        "content": getattr(message, "content", None),
+        "content": getattr(message, "content", None) if message is not None else None,
         "tool_calls": [
             {
                 "id": tool_call.id,
@@ -119,6 +204,68 @@ def _assistant_tool_call_message(
             for tool_call in tool_calls
         ],
     }
+
+
+def _first_choice_delta(chunk: Any) -> Any:
+    choices = _get_value(chunk, "choices") or []
+    if not choices:
+        return None
+    return _get_value(choices[0], "delta")
+
+
+def _accumulate_tool_call_delta(
+    tool_call_parts: dict[int, dict[str, str]],
+    tool_call_delta: Any,
+) -> None:
+    index = _get_value(tool_call_delta, "index") or 0
+    part = tool_call_parts.setdefault(
+        index,
+        {"id": "", "type": "function", "name": "", "arguments": ""},
+    )
+
+    call_id = _get_value(tool_call_delta, "id")
+    if call_id:
+        part["id"] = call_id
+
+    call_type = _get_value(tool_call_delta, "type")
+    if call_type:
+        part["type"] = call_type
+
+    function = _get_value(tool_call_delta, "function")
+    if function is None:
+        return
+
+    name = _get_value(function, "name")
+    if name:
+        part["name"] += name
+
+    arguments = _get_value(function, "arguments")
+    if arguments:
+        part["arguments"] += arguments
+
+
+def _build_streamed_tool_calls(
+    tool_call_parts: dict[int, dict[str, str]],
+) -> list[Any]:
+    tool_calls = []
+    for index in sorted(tool_call_parts):
+        part = tool_call_parts[index]
+        tool_calls.append(
+            SimpleNamespace(
+                id=part["id"],
+                function=SimpleNamespace(
+                    name=part["name"],
+                    arguments=part["arguments"],
+                ),
+            )
+        )
+    return tool_calls
+
+
+def _get_value(source: Any, key: str) -> Any:
+    if isinstance(source, dict):
+        return source.get(key)
+    return getattr(source, key, None)
 
 
 def _execute_tool_call(

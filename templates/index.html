@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notelet Runtime Console</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Notelet v0.0.5</p>
+          <h1>Runtime Console</h1>
+          <p class="lede">
+            Watch the agent think in tools: streaming answers, local memory, and
+            execution events in one small console.
+          </p>
+        </div>
+        <dl class="runtime-card">
+          <div>
+            <dt>Model</dt>
+            <dd id="modelName">{{ model }}</dd>
+          </div>
+          <div>
+            <dt>Transport</dt>
+            <dd>SSE stream</dd>
+          </div>
+          <div>
+            <dt>Memory</dt>
+            <dd>SQLite notes</dd>
+          </div>
+        </dl>
+      </header>
+
+      <section class="workspace">
+        <section class="panel chat-panel" aria-labelledby="chatTitle">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Conversation</p>
+              <h2 id="chatTitle">Chat Stream</h2>
+            </div>
+            <span id="streamState" class="status-pill">Idle</span>
+          </div>
+          <div id="chatLog" class="chat-log" aria-live="polite">
+            <article class="empty-state">
+              Ask Notelet to remember something, then watch the runtime events
+              light up on the right.
+            </article>
+          </div>
+          <form id="chatForm" class="composer">
+            <textarea
+              id="messageInput"
+              name="message"
+              rows="3"
+              placeholder="Remember: review the streaming UI tomorrow"
+              required
+            ></textarea>
+            <button id="sendButton" type="submit">Send</button>
+          </form>
+        </section>
+
+        <aside class="panel event-panel" aria-labelledby="eventsTitle">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Trace</p>
+              <h2 id="eventsTitle">Runtime Events</h2>
+            </div>
+            <button id="clearEventsButton" class="ghost-button" type="button">
+              Clear
+            </button>
+          </div>
+          <ol id="eventLog" class="event-log">
+            <li class="empty-state">No events yet.</li>
+          </ol>
+        </aside>
+      </section>
+
+      <section class="panel memory-panel" aria-labelledby="memoryTitle">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Memory</p>
+            <h2 id="memoryTitle">Recent Notes</h2>
+          </div>
+          <button id="refreshNotesButton" class="ghost-button" type="button">
+            Refresh
+          </button>
+        </div>
+        <pre id="memoryLog" class="memory-log">Loading notes...</pre>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+  </body>
+</html>

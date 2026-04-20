@@ -1,0 +1,378 @@
+:root {
+  --ink: #241f1a;
+  --muted: #75695b;
+  --paper: #f4ecd8;
+  --paper-strong: #fff8e8;
+  --line: #d8c8a9;
+  --console: #1e2a24;
+  --console-soft: #2f4639;
+  --accent: #c56b3c;
+  --accent-strong: #9f4927;
+  --success: #3d7d55;
+  --danger: #b34538;
+  --shadow: 0 24px 70px rgba(60, 43, 25, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(197, 107, 60, 0.22), transparent 30rem),
+    linear-gradient(135deg, rgba(255, 248, 232, 0.92), rgba(232, 218, 189, 0.92)),
+    var(--paper);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 36px 0;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1fr minmax(260px, 360px);
+  gap: 24px;
+  align-items: stretch;
+  margin-bottom: 24px;
+}
+
+.hero h1,
+.panel h2 {
+  margin: 0;
+  line-height: 1;
+}
+
+.hero h1 {
+  font-size: clamp(2.7rem, 7vw, 5.8rem);
+  letter-spacing: -0.07em;
+}
+
+.lede {
+  max-width: 720px;
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 1.12rem;
+  line-height: 1.6;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent-strong);
+  font-family: "Courier New", monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.runtime-card,
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: rgba(255, 248, 232, 0.86);
+  box-shadow: var(--shadow);
+}
+
+.runtime-card {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 22px;
+}
+
+.runtime-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 12px;
+}
+
+.runtime-card div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.runtime-card dt {
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.runtime-card dd {
+  margin: 0;
+  font-family: "Courier New", monospace;
+  font-weight: 700;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.panel h2 {
+  font-size: 1.35rem;
+  letter-spacing: -0.03em;
+}
+
+.status-pill,
+.ghost-button,
+.composer button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-pill {
+  padding: 8px 12px;
+  background: #efe1c2;
+  color: var(--muted);
+}
+
+.status-pill.streaming {
+  background: var(--console);
+  color: #d4f3dc;
+}
+
+.status-pill.error {
+  background: var(--danger);
+  color: #fff7ee;
+}
+
+.ghost-button {
+  padding: 9px 12px;
+  color: var(--accent-strong);
+  background: transparent;
+  cursor: pointer;
+}
+
+.chat-log {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 430px;
+  max-height: 56vh;
+  overflow: auto;
+  padding: 4px 4px 12px;
+}
+
+.message {
+  width: min(88%, 680px);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 14px 16px;
+  background: var(--paper-strong);
+  line-height: 1.55;
+}
+
+.message.user {
+  justify-self: end;
+  background: #efe1c2;
+}
+
+.message.agent {
+  justify-self: start;
+  background:
+    linear-gradient(90deg, rgba(197, 107, 60, 0.12), transparent),
+    var(--paper-strong);
+}
+
+.message-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.composer textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 14px 16px;
+  color: var(--ink);
+  background: rgba(255, 248, 232, 0.92);
+  line-height: 1.45;
+}
+
+.composer button {
+  align-self: end;
+  padding: 14px 20px;
+  border-color: var(--accent);
+  color: #fff9ef;
+  background: var(--accent);
+  cursor: pointer;
+}
+
+.composer button:disabled,
+.composer textarea:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.event-panel {
+  background: var(--console);
+  color: #e7f4df;
+}
+
+.event-panel .eyebrow,
+.event-panel .panel-header h2 {
+  color: #f1e8c9;
+}
+
+.event-panel .ghost-button {
+  border-color: rgba(231, 244, 223, 0.28);
+  color: #d4f3dc;
+}
+
+.event-log {
+  display: grid;
+  gap: 10px;
+  max-height: 560px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.event-item {
+  border: 1px solid rgba(231, 244, 223, 0.16);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  font-family: "Courier New", monospace;
+}
+
+.event-type {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: #ffd99d;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.event-item.error,
+.event-item.tool_error {
+  border-color: rgba(255, 166, 148, 0.46);
+  background: rgba(179, 69, 56, 0.18);
+}
+
+.event-json {
+  margin: 0;
+  overflow: auto;
+  color: #cfe6d1;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.memory-panel {
+  margin-top: 22px;
+}
+
+.memory-log {
+  min-height: 120px;
+  margin: 0;
+  border: 1px dashed var(--line);
+  border-radius: 22px;
+  padding: 16px;
+  overflow: auto;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(216, 200, 169, 0.22) 0,
+      rgba(216, 200, 169, 0.22) 1px,
+      transparent 1px,
+      transparent 28px
+    ),
+    rgba(255, 248, 232, 0.82);
+  color: var(--muted);
+  font-family: "Courier New", monospace;
+  line-height: 1.75;
+}
+
+.empty-state {
+  border: 1px dashed var(--line);
+  border-radius: 22px;
+  padding: 18px;
+  color: var(--muted);
+  background: rgba(255, 248, 232, 0.58);
+  line-height: 1.55;
+}
+
+.event-panel .empty-state {
+  border-color: rgba(231, 244, 223, 0.22);
+  color: rgba(231, 244, 223, 0.68);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+@media (max-width: 860px) {
+  .shell {
+    width: min(100% - 20px, 680px);
+    padding: 18px 0;
+  }
+
+  .hero,
+  .workspace,
+  .composer {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.4rem, 18vw, 4.5rem);
+  }
+
+  .chat-log {
+    min-height: 340px;
+    max-height: none;
+  }
+
+  .message {
+    width: 100%;
+  }
+
+  .composer button {
+    width: 100%;
+  }
+}

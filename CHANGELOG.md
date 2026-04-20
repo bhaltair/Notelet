@@ -2,6 +2,18 @@
 
 All notable changes to Notelet are documented here.
 
+## v0.0.5 - 2026-04-20
+
+### Added
+
+- Added streaming agent turns that emit `answer_delta`, tool, model response,
+  and final answer events.
+- Added a thin Flask API with JSON chat, SSE streaming chat, health, and notes
+  endpoints.
+- Added a lightweight browser runtime console for streaming answers, runtime
+  events, and recent memory.
+- Added deterministic tests for streaming agent behavior and Flask endpoints.
+
 ## v0.0.4 - 2026-04-19
 
 ### Added

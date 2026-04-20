@@ -9,6 +9,8 @@ to call local memory tools:
 - `list_recent_notes(limit)`: list the newest notes
 
 The code is intentionally small so the model/tool loop is easy to inspect.
+It also includes an optional Flask runtime console for watching streaming
+answers, tool calls, tool results, and local memory in the browser.
 
 ## Setup
 
@@ -65,6 +67,8 @@ reasoning model.
 
 ## Run
 
+### CLI
+
 ```powershell
 uv run python agent.py
 ```
@@ -96,6 +100,60 @@ The agent also writes structured execution traces to `traces/YYYY-MM-DD.jsonl`
 with user messages, model responses, tool calls, tool results, final answers,
 and errors.
 
+### Web Runtime Console
+
+Run the local Flask console:
+
+```powershell
+uv run python server.py
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5000
+```
+
+The console streams assistant answers with Server-Sent Events and shows runtime
+events alongside recent SQLite memory. It is intended as a local, single-user
+runtime view rather than a multi-user web product.
+
+### HTTP API
+
+Health:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5000/health
+```
+
+Non-streaming chat:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://127.0.0.1:5000/api/chat `
+  -ContentType "application/json" `
+  -Body '{"message":"What notes have I saved?"}'
+```
+
+Streaming chat:
+
+```text
+POST /api/chat/stream
+Content-Type: application/json
+
+{"message":"Remember: review the streaming console"}
+```
+
+The streaming endpoint returns SSE events such as `answer_delta`, `tool_call`,
+`tool_result`, `tool_error`, and `final_answer`.
+
+Recent notes:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:5000/api/notes
+```
+
 ## Test
 
 ```powershell
@@ -106,8 +164,10 @@ uv run pytest
 
 - `agent.py`: interactive CLI loop, Chat Completions tool-call loop, and trace wiring
 - `memory.py`: SQLite-backed persistent note memory
+- `server.py`: local Flask API and browser runtime console
 - `tracing.py`: JSONL execution tracing
 - `tools.py`: local note tools, tool schemas, and the tool registry
+- `static/` and `templates/`: lightweight runtime console frontend
 - `notes.db`: ignored local durable notes storage
 - `traces/`: ignored local JSONL execution traces
 - `tests/`: unit tests for tool behavior and the agent loop

@@ -47,6 +47,27 @@ def make_completion(content=None, tool_calls=None):
     )
 
 
+def make_stream_chunk(content=None, tool_calls=None):
+    delta = {}
+    if content is not None:
+        delta["content"] = content
+    if tool_calls is not None:
+        delta["tool_calls"] = tool_calls
+    return {"choices": [{"delta": delta}]}
+
+
+def make_tool_delta(index=0, call_id=None, name=None, arguments=None):
+    function = {}
+    if name is not None:
+        function["name"] = name
+    if arguments is not None:
+        function["arguments"] = arguments
+    delta = {"index": index, "function": function}
+    if call_id is not None:
+        delta["id"] = call_id
+    return delta
+
+
 def test_run_agent_turn_executes_requested_tool_with_chat_completions(monkeypatch):
     tool_call = make_tool_call(
         "add_note",
@@ -124,6 +145,110 @@ def test_run_agent_turn_emits_structured_trace_events(monkeypatch):
     assert events[0]["content"] == "Hello"
     assert events[1]["model"] == "test-model"
     assert events[2]["content"] == "Hello there."
+
+
+def test_stream_agent_turn_yields_answer_deltas():
+    client = FakeChatClient(
+        [
+            [
+                make_stream_chunk(content="Hello"),
+                make_stream_chunk(content=" there."),
+            ]
+        ]
+    )
+    messages = []
+    events = list(
+        agent.stream_agent_turn(
+            client,
+            messages,
+            "Hello",
+            model="test-model",
+        )
+    )
+
+    assert [event["type"] for event in events] == [
+        "user_message",
+        "answer_delta",
+        "answer_delta",
+        "model_response",
+        "final_answer",
+    ]
+    assert [event["content"] for event in events if event["type"] == "answer_delta"] == [
+        "Hello",
+        " there.",
+    ]
+    assert events[-1]["content"] == "Hello there."
+    assert messages == [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": "Hello there."},
+    ]
+    assert client.chat.completions.calls[0]["stream"] is True
+
+
+def test_stream_agent_turn_runs_tools_before_streaming_final_answer(monkeypatch):
+    client = FakeChatClient(
+        [
+            [
+                make_stream_chunk(
+                    tool_calls=[
+                        make_tool_delta(
+                            call_id="call_123",
+                            name="add_note",
+                            arguments='{"content": ',
+                        )
+                    ]
+                ),
+                make_stream_chunk(
+                    tool_calls=[
+                        make_tool_delta(
+                            arguments='"Review simple agent"}',
+                        )
+                    ]
+                ),
+            ],
+            [
+                make_stream_chunk(content="Saved"),
+                make_stream_chunk(content=" it."),
+            ],
+        ]
+    )
+    tool_calls = []
+
+    def fake_run_tool(name, arguments):
+        tool_calls.append((name, arguments))
+        return "Note saved."
+
+    monkeypatch.setattr(agent, "run_tool", fake_run_tool)
+
+    events = list(
+        agent.stream_agent_turn(
+            client,
+            [],
+            "Remember: Review simple agent",
+            model="test-model",
+        )
+    )
+
+    assert tool_calls == [("add_note", {"content": "Review simple agent"})]
+    assert [event["type"] for event in events] == [
+        "user_message",
+        "model_response",
+        "tool_call",
+        "tool_result",
+        "answer_delta",
+        "answer_delta",
+        "model_response",
+        "final_answer",
+    ]
+    assert events[2]["arguments"] == {"content": "Review simple agent"}
+    assert events[3]["output"] == "Note saved."
+    assert events[-1]["content"] == "Saved it."
+    assert len(client.chat.completions.calls) == 2
+    assert client.chat.completions.calls[1]["messages"][-1] == {
+        "role": "tool",
+        "tool_call_id": "call_123",
+        "content": "Note saved.",
+    }
 
 
 def test_run_agent_turn_reports_malformed_tool_arguments(monkeypatch):
