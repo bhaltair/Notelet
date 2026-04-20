@@ -117,6 +117,14 @@ textarea {
   font-weight: 700;
 }
 
+.status-word.streaming {
+  color: var(--success);
+}
+
+.status-word.error {
+  color: var(--danger);
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
@@ -219,9 +227,29 @@ textarea {
 
 .composer {
   display: grid;
-  grid-template-columns: 1fr auto;
   gap: 12px;
   margin-top: 14px;
+}
+
+.composer-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+
+.example-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.example-chip {
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--accent-strong);
+  background: rgba(255, 248, 232, 0.62);
+  cursor: pointer;
 }
 
 .composer textarea {
@@ -235,7 +263,7 @@ textarea {
   line-height: 1.45;
 }
 
-.composer button {
+.composer-row > button {
   align-self: end;
   padding: 14px 20px;
   border-color: var(--accent);
@@ -290,6 +318,12 @@ textarea {
   font-size: 0.76rem;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.event-summary {
+  margin: 0 0 8px;
+  color: #f1e8c9;
+  font-size: 0.82rem;
 }
 
 .event-item.error,
@@ -355,7 +389,7 @@ textarea {
 
   .hero,
   .workspace,
-  .composer {
+  .composer-row {
     grid-template-columns: 1fr;
   }
 
@@ -372,7 +406,7 @@ textarea {
     width: 100%;
   }
 
-  .composer button {
+  .composer-row > button {
     width: 100%;
   }
 }

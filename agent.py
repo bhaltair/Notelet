@@ -88,6 +88,8 @@ def stream_agent_turn(
     on_tool_event: EventHandler | None = None,
     on_event: EventHandler | None = None,
 ) -> Iterator[dict[str, Any]]:
+    # 端到端 streaming 的第一段：agent 不直接打印文本，而是产出结构化事件。
+    # server.py 会把这些事件包成 SSE，前端再按事件类型更新不同 UI 区域。
     model = model or default_model()
     user_message = {"role": "user", "content": user_text}
     user_event = {"type": "user_message", "content": user_text}
@@ -111,18 +113,24 @@ def stream_agent_turn(
         )
 
         for chunk in stream:
+            # OpenAI-compatible streaming 每次给一个 chunk；chunk 里通常只有本次增量。
+            # delta.content 是回答文本片段，delta.tool_calls 是工具调用碎片。
             delta = _first_choice_delta(chunk)
             if delta is None:
                 continue
 
             content = _get_value(delta, "content")
             if content:
+                # answer_delta 是给前端实时追加到 Agent 气泡里的增量文本。
+                # 完整答案会在 stream 结束后合并，并通过 final_answer 事件发出。
                 answer_parts.append(content)
                 event = {"type": "answer_delta", "content": content}
                 _emit_event(on_event, event)
                 yield event
 
             for tool_call_delta in _get_value(delta, "tool_calls") or []:
+                # 工具调用在 streaming 里可能被拆成多块，尤其是 JSON arguments。
+                # 这里先按 tool index 累积，等这一轮模型 stream 结束后再执行工具。
                 _accumulate_tool_call_delta(tool_call_parts, tool_call_delta)
 
         tool_calls = _build_streamed_tool_calls(tool_call_parts)
@@ -148,6 +156,8 @@ def stream_agent_turn(
             tool_events: list[dict[str, Any]] = []
 
             def capture_tool_event(event: dict[str, Any]) -> None:
+                # _execute_tool_call 会产生 tool_call/tool_result/tool_error。
+                # 先捕获再 yield，保证这些事件也能进入 SSE 流并被前端时间线展示。
                 tool_events.append(event)
                 _emit_event(on_tool_event, event)
 

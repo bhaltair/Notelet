@@ -1,4 +1,3 @@
-import json
 from types import SimpleNamespace
 
 import server
@@ -54,13 +53,38 @@ def test_chat_endpoint_returns_answer_and_events():
     ]
 
 
-def test_index_renders_runtime_console():
-    app = server.create_app(client=FakeChatClient([]))
+def test_index_explains_frontend_dev_server_when_dist_is_missing(tmp_path):
+    missing_dist = tmp_path / "missing"
+    app = server.create_app(client=FakeChatClient([]), frontend_dist=missing_dist)
 
     response = app.test_client().get("/")
 
     assert response.status_code == 200
-    assert "Notelet Runtime Console" in response.get_data(as_text=True)
+    body = response.get_data(as_text=True)
+    assert "Notelet API Server" in body
+    assert "npm.cmd run dev" in body
+
+
+def test_index_serves_built_react_frontend(tmp_path):
+    (tmp_path / "index.html").write_text("built frontend", encoding="utf-8")
+    app = server.create_app(client=FakeChatClient([]), frontend_dist=tmp_path)
+
+    response = app.test_client().get("/")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "built frontend"
+
+
+def test_frontend_assets_serves_built_assets(tmp_path):
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "app.js").write_text("console.log('hi')", encoding="utf-8")
+    app = server.create_app(client=FakeChatClient([]), frontend_dist=tmp_path)
+
+    response = app.test_client().get("/assets/app.js")
+
+    assert response.status_code == 200
+    assert response.get_data(as_text=True) == "console.log('hi')"
 
 
 def test_chat_endpoint_rejects_empty_message():

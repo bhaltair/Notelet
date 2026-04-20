@@ -9,8 +9,8 @@ to call local memory tools:
 - `list_recent_notes(limit)`: list the newest notes
 
 The code is intentionally small so the model/tool loop is easy to inspect.
-It also includes an optional Flask runtime console for watching streaming
-answers, tool calls, tool results, and local memory in the browser.
+It also includes a React/Vite runtime console for watching streaming answers,
+tool calls, tool results, and local memory in the browser.
 
 ## Setup
 
@@ -18,6 +18,14 @@ Install dependencies with uv:
 
 ```powershell
 uv sync
+```
+
+Install frontend dependencies with npm:
+
+```powershell
+cd frontend
+npm.cmd install
+cd ..
 ```
 
 Set your API key:
@@ -102,9 +110,36 @@ and errors.
 
 ### Web Runtime Console
 
-Run the local Flask console:
+Run the Flask API backend:
 
 ```powershell
+uv run python server.py
+```
+
+In a second terminal, run the React/Vite frontend:
+
+```powershell
+cd frontend
+npm.cmd run dev
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5173
+```
+
+The Vite dev server proxies `/api` and `/health` to Flask. The console streams
+assistant answers with Server-Sent Events and shows runtime events alongside
+recent SQLite memory. It is intended as a local, single-user runtime view rather
+than a multi-user web product.
+
+To serve a built frontend from Flask:
+
+```powershell
+cd frontend
+npm.cmd run build
+cd ..
 uv run python server.py
 ```
 
@@ -113,10 +148,6 @@ Then open:
 ```text
 http://127.0.0.1:5000
 ```
-
-The console streams assistant answers with Server-Sent Events and shows runtime
-events alongside recent SQLite memory. It is intended as a local, single-user
-runtime view rather than a multi-user web product.
 
 ### HTTP API
 
@@ -160,14 +191,22 @@ Invoke-RestMethod http://127.0.0.1:5000/api/notes
 uv run pytest
 ```
 
+Build the frontend:
+
+```powershell
+cd frontend
+npm.cmd run build
+```
+
 ## Project Shape
 
 - `agent.py`: interactive CLI loop, Chat Completions tool-call loop, and trace wiring
+- `frontend/`: React, TypeScript, and Vite runtime console
 - `memory.py`: SQLite-backed persistent note memory
-- `server.py`: local Flask API and browser runtime console
+- `server.py`: local Flask API, SSE streaming endpoint, and built frontend serving
 - `tracing.py`: JSONL execution tracing
 - `tools.py`: local note tools, tool schemas, and the tool registry
-- `static/` and `templates/`: lightweight runtime console frontend
+- `.agents/skills/git-release-flow`: repo-local release workflow skill
 - `notes.db`: ignored local durable notes storage
 - `traces/`: ignored local JSONL execution traces
 - `tests/`: unit tests for tool behavior and the agent loop

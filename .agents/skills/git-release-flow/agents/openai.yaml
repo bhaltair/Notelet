@@ -1,0 +1,4 @@
+interface:
+  display_name: "Git Release Flow"
+  short_description: "Verify, commit, tag, and push releases safely"
+  default_prompt: "Use $git-release-flow to verify, commit, tag, and push a repository release."

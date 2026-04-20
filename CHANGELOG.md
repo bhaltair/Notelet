@@ -2,6 +2,23 @@
 
 All notable changes to Notelet are documented here.
 
+## v0.0.6 - 2026-04-20
+
+### Added
+
+- Added a React, TypeScript, and Vite runtime console frontend.
+- Added typed SSE event handling for streaming agent output, tool calls, tool
+  results, and errors.
+- Added Vite development proxy and build workflow for the Flask API backend.
+- Added repo-local `git-release-flow` skill under `.agents/skills/`.
+
+### Changed
+
+- Replaced the Flask template and vanilla JavaScript console with the
+  React/Vite frontend.
+- Updated Flask to serve the built React app when `frontend/dist` exists and to
+  show development instructions otherwise.
+
 ## v0.0.5 - 2026-04-20
 
 ### Added

@@ -10,3 +10,5 @@ test_runs/
 notes.md
 notes.db
 traces/
+frontend/node_modules/
+frontend/dist/
