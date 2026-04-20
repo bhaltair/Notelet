@@ -198,6 +198,27 @@ cd frontend
 npm.cmd run build
 ```
 
+### Review Agent
+
+Pull requests run `.github/workflows/review-agent.yml` after tests and syntax
+verification pass. The review agent posts or updates one PR comment with
+actionable findings.
+
+To preview the review locally without posting to GitHub:
+
+```powershell
+uv run python scripts/review_agent.py --dry-run --base origin/main --head HEAD
+```
+
+The script reads `.env` by default and keeps existing shell environment values as
+overrides. Use `--env-file path\to\.env` to point at another file.
+
+Optionally choose a model:
+
+```powershell
+uv run python scripts/review_agent.py --dry-run --base origin/main --head HEAD --model gpt-5.4-mini
+```
+
 ## Project Shape
 
 - `agent.py`: interactive CLI loop, Chat Completions tool-call loop, and trace wiring

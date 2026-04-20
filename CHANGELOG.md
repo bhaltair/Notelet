@@ -2,6 +2,16 @@
 
 All notable changes to Notelet are documented here.
 
+## Unreleased
+
+### Added
+
+- Added a GitHub Actions PR review agent workflow with a deterministic Python
+  review script, prompt template, JSON validation, and tests.
+- Added local review-agent dry-run options for explicit base/head refs and model
+  selection.
+- Added default `.env` loading for local review-agent runs.
+
 ## v0.0.6 - 2026-04-20
 
 ### Added
